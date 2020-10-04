@@ -1,0 +1,30 @@
+x Server side
+	x Listar conexões disponíveis sem incluir a si mesmo
+	x Armazenar usuários no servidor com usernames além dos dados de conexão
+	- Impedir mesmos usernames fazendo login
+
+- User Side
+	x Escolha de usename
+	x Função connect com outro chat
+	- Consigo enviar mensagem?
+
+- User Host Side
+	- Implementar comandos de adm
+		- /close
+		- /ban <username>
+		- /kick <username>
+
+x User Guest Side
+	x Implementar comandos de usuário comum
+		x /disconnect 
+
+- Bugs
+	x Lista de users não pode ser atualizada com sock novo depois de virar chat, impossível obter sockname com getsockname()
+	- Servidor central não atualiza os objetos de usuários desconectados e conectados 
+		- Não atualiza os usuários enviando mensagem
+			- Fazer isso precisaria de coisas de select
+	- Retorno do client para o servidor faz ele refazer o login
+		- Possivelmente usuários duplicados
+	- Client desconectado deixa host recebendo mensagens vazias do socket morto 
+		- Não tem como atualizar users ou read 
+		
