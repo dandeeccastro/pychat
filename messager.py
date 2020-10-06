@@ -26,7 +26,7 @@ class Messager:
 
     def emit_message(self,message,receivers):
         for receiver in receivers:
-            receiver.send(bytes(message,encoding='utf-8'))
+            receiver.send(message)
 
     def reconnect(self,host,port):
         self.sock.close()
