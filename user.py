@@ -37,7 +37,7 @@ class User:
             response = str(self.sock.recv(1024),encoding='utf-8')
             print(response)
         self.username = username
-        self.get_available_chats()
+        # self.get_available_chats()
 
     # Reconecta o usuário, enviando a mensagem de retorno dele 
     # "OLD <username>" e pegando os chats disponíveis

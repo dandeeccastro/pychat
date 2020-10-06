@@ -79,7 +79,7 @@ class CentralServer:
         print("> [server::new_connection] new connection detected")
         self.users[username] = User(username,sock)
         self.inputs.append(sock)
-        sock.send(bytes(self.show_available_chats(),encoding='utf-8'))
+        # sock.send(bytes(self.show_available_chats(),encoding='utf-8'))
         print("> [server::new_connection] new connection solved")
 
     # Lida com usuários reconectando de chats
