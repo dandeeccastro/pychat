@@ -2,29 +2,31 @@ import socket
 import select 
 import sys 
 
+from messager import Messager
+
 class User:
 
     # Inicializa o User (se não tiver sock ele gera para uso no CLI, mas se ele receber sock 
     # é porque está sendo usado no CentralServer)
-    def __init__(self,username=None,sock=None):
+    def __init__(self,username=None,messager=None):
         self.username = username
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) if sock == None else sock
         self.chat_info = None
+        self.messager = Messager() if messager == None 
 
     # Conecta o usuário no CentralServer e mantém o loop de conexão (input() é a chamada bloqueante)
     def connect_to_central_server(self,host,port):
-        self.sock.connect((host,port))
+        self.messager.connect(host,port)
         self.register_username()
 
         while True:
-            inputs = [sys.stdin, self.sock]
+            inputs = [sys.stdin, self.messager.get_sock()]
             read, write, execute = select.select(inputs,[],[])
             for command in read:
                 if command == sys.stdin:
                     message = input()
                     self.handle_command(message)
-                elif command == self.sock:
-                    server_message = str(self.sock.recv(1024),encoding='utf-8')
+                elif command == self.messager.sock:
+                    server_message = self.messager.receive()
                     print(server_message)
     
     # Mantém o usuário escolhendo o username dele até que seja um que não 
@@ -33,23 +35,15 @@ class User:
         response = "USERNAME ALREADY EXISTS"
         while response != "REGISTERED":
             username = input("Insira seu username: ") 
-            self.sock.send(bytes('NEW ' + username,encoding='utf-8'))
-            response = str(self.sock.recv(1024),encoding='utf-8')
+            response = self.messager.send_and_receive('NEW ' + username)
             print(response)
         self.username = username
-        # self.get_available_chats()
 
     # Reconecta o usuário, enviando a mensagem de retorno dele 
     # "OLD <username>" e pegando os chats disponíveis
     def reconnect_to_central_server(self):
-        print("> [user::reconnect_to_central_server] returning user")
-        self.sock.send(bytes('OLD ' + self.username,encoding='utf-8'))
-        self.get_available_chats()
-
-    # Pega e printa os chats disponíveis no CentralServer
-    def get_available_chats(self):
-        chats = self.sock.recv(1024)
-        print(str(chats,encoding='utf-8'))
+        chats = self.messager.send_and_receive('OLD ' + self.username)
+        print(chats)
 
     # Lida com comandos enviados para o CentralServer
     def handle_command(self,command):
@@ -58,13 +52,12 @@ class User:
 
         if command[0] == "close":
             print("> [user::handle_command] sending close command")
-            self.sock.send(bytes(command[0] + ' ' + self.username,encoding='utf-8'))
-            self.sock.recv(1024)
-            self.sock.close()
+            self.messager.send_and_receive(command[0] + ' ' + self.username)
+            self.messager.close()
             sys.exit()
 
         elif command[0] == "connect":
-            chat_id = self.get_chat_id(command_blob)
+            chat_id = self.messager.send_and_receive(command_blob)
             if chat_id != 'DENIED':
                 inputs = self.connect_to_chat(chat_id)
                 self.handle_chat_messaging(inputs)
@@ -89,13 +82,11 @@ class User:
         chat_info = tuple(chat_info.split(' '))
         chat_info = (chat_info[0],int(chat_info[1]))
 
-        self.sock.close()
-        self.sock = socket.socket()
-        self.sock.connect(chat_info)
-        self.sock.setblocking(False)
-        self.sock.send(bytes('('+self.username+' has checked in)',encoding='utf-8'))
+        self.messager.reconnect(chat_info[0],chat_info[1])
+        self.messager.set_blocking_connections(False)
+        self.messager.send('('+self.username+' has checked in)')
 
-        inputs = [sys.stdin, self.sock]
+        inputs = [sys.stdin, self.messager.get_sock()]
         return inputs 
 
     # Lida com o loop para mensagens, recebendo elas com sockets e enviando as inseridas via stdin.
@@ -106,44 +97,35 @@ class User:
             closed_connection = 0
 
             for command in read:
-                if command == self.sock:
-                    message = self.sock.recv(1024)
+                if command == self.messager.get_sock():
+                    message = self.messager.receive()
                     if not message:
                         inputs.remove(command)
                     else:
-                        message = str(message, encoding='utf-8')
                         print(message)
                 elif command == sys.stdin:
                     message = input()
                     if message[0] != '/':
-                        self.send_message(message)
+                        self.messager.send('(' + self.username + ') ' + message)
                     else:
                         closed_connection = self.execute_client_side_command(message.split())
 
             if closed_connection:
                 return None
 
-    # Adiciona o username com parenteses e envia para o host
-    def send_message(self,message):
-        message = '(' + self.username + ') ' + message
-        self.sock.send(bytes(message, encoding='utf-8'))
-
     # Quando não se é host no sistema, o comando é executado por essa função. Ela só tem close por enquanto
     def execute_client_side_command(self,message):
         if message[0] == '/close' or message[0] == '/quit':
-            message = '(' + self.username + ' checked out for today)'
-            self.sock.send(bytes(message, encoding='utf-8'))
-            self.sock.close()
+            self.messager.send('(' + self.username + ' checked out for today)')
+            self.messager.close()
             return 1
         return 0
     
     # Envia o comando de criação de chat, recebe o par host port e configura 
     # suas estruturas internas para hostear o chat
     def generate_host_chat_info(self,command_blob):
-        self.sock.send(command_blob)
+        chat_data = self.messager.send_and_receive(command_blob)
 
-        chat_data = self.sock.recv(1024)
-        chat_data = str(chat_data,encoding='utf-8')
         chat_data = tuple(chat_data.split(' '))
         chat_data = (chat_data[0], int(chat_data[1]))
         self.chat_info = chat_data
@@ -154,12 +136,9 @@ class User:
     # Reinicia o socket com informações do par host port e gera as estruturas de dados de 
     # manutenção do host do chat
     def configure_chat_hosting(self):
-        self.sock.close()
-        self.sock = socket.socket()
-        # print("> [user::configure_chat_hosting] " + str(self.chat_info))
-        self.sock.bind(self.chat_info)
-        self.sock.listen(5) #TODO remove magic number from logic
-        self.sock.setblocking(False)
+        self.messager.close()
+        self.messager.host_connection(self.chat_info[0], self.chat_info[1], 5)
+        self.messager.set_blocking_connections(False)
         
         inputs = [self.sock, sys.stdin]
         users = []
@@ -173,10 +152,10 @@ class User:
             chat_offline = 0
             for command in read:
                 # Conecta o novo usuário e atualiza as estruturas de dados
-                if command == self.sock:
-                    new_sock, addr = self.sock.accept()
-                    users.append(new_sock)
-                    inputs.append(new_sock)
+                if command == self.messager.get_sock():
+                    new_messager = self.messager.accept() # TODO mudar lógica para lidar com messagers
+                    users.append(new_messager.get_sock())
+                    inputs.append(new_messager.get_sock())
 
                 # Ou envia a mensagem ou executa o comando
                 elif command == sys.stdin:
