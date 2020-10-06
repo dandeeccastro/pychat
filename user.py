@@ -140,7 +140,7 @@ class User:
         self.messager.host_connection(self.chat_info[0], self.chat_info[1], 5)
         self.messager.set_blocking_connections(False)
         
-        inputs = [self.sock, sys.stdin]
+        inputs = [self.messager.get_sock(), sys.stdin]
         users = []
 
         return inputs, users
@@ -154,7 +154,7 @@ class User:
                 # Conecta o novo usuário e atualiza as estruturas de dados
                 if command == self.messager.get_sock():
                     new_messager = self.messager.accept() # TODO mudar lógica para lidar com messagers
-                    users.append(new_messager.get_sock())
+                    users.append(new_messager)
                     inputs.append(new_messager.get_sock())
 
                 # Ou envia a mensagem ou executa o comando
@@ -162,7 +162,7 @@ class User:
                     message = input()
                     if message[0] != '/':
                         message = '(' + self.username + ') ' + message
-                        self.broadcast_message(users,self.sock,message)
+                        self.messager.emit_message(message, users)
                     else:
                         users, inputs, chat_offline = self.execute_host_side_command(users,inputs,message.split())
 
@@ -178,21 +178,18 @@ class User:
         message = sock.recv(1024)
         # Usuário está desconectado
         if not message:
-            users.remove(sock)
             inputs.remove(sock)
+            for messager in users:
+                if messager.sock == sock:
+                    users.remove(messager)
+                    break
             return users, inputs, 0
         # Printa mensagem para si mesmo e broadcasta para os outros
         else:
             message = str(message,encoding='utf-8') 
             print(message)
-            self.broadcast_message(users,sock,message)
+            self.messager.emit_message(message,users)
             return users, inputs, 0
-
-    # Envia a mensagem para todos os usuários logados no chat
-    def broadcast_message(self,users,sock,message):
-        for user in users:
-            if user is not sock:
-                user.send(bytes(message, encoding='utf-8')) 
 
     # Executa comandos no lado do host do chat (aqui teriamos /ban e /kick)
     def execute_host_side_command(self,users,inputs,message):
@@ -205,9 +202,7 @@ class User:
 
     # Reconecta o usuário no servidor central (par host port está hardcoded ainda)
     def return_to_server(self):
-        self.sock.close()
-        self.sock = socket.socket()
-        self.sock.connect(("127.0.0.1",10000))
+        self.messager.reconnect("127.0.0.1",10000)
         self.reconnect_to_central_server()
 
 if __name__ == '__main__':
