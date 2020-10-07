@@ -11,7 +11,7 @@ class User:
     def __init__(self,username=None,messager=None):
         self.username = username
         self.chat_info = None
-        self.messager = Messager() if messager == None 
+        self.messager = Messager() if messager == None else messager
 
     # Conecta o usuário no CentralServer e mantém o loop de conexão (input() é a chamada bloqueante)
     def connect_to_central_server(self,host,port):
@@ -48,7 +48,7 @@ class User:
     # Lida com comandos enviados para o CentralServer
     def handle_command(self,command):
         command = command.split()
-        command_blob = bytes(' '.join(command),encoding='utf-8')
+        full_command = ' '.join(command)
 
         if command[0] == "close":
             print("> [user::handle_command] sending close command")
@@ -57,14 +57,14 @@ class User:
             sys.exit()
 
         elif command[0] == "connect":
-            chat_id = self.messager.send_and_receive(command_blob)
+            chat_id = self.messager.send_and_receive(full_command)
             if chat_id != 'DENIED':
                 inputs = self.connect_to_chat(chat_id)
                 self.handle_chat_messaging(inputs)
                 self.return_to_server()
 
         elif command[0] == "create_chat":
-            inputs, users = self.generate_host_chat_info(command_blob)
+            inputs, users = self.generate_host_chat_info(full_command)
             self.host_chat(inputs, users)
             self.return_to_server()
 

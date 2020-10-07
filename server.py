@@ -16,13 +16,14 @@ class CentralServer:
         self.messager = Messager()
         self.users = dict() # username => User object
         self.chats = [] # array de usernames
+        self.messagers = []
         self.inputs = [sys.stdin]
         self.start_server()
 
     # Iniciando socket e ouvindo usuários
     def start_server(self):
         print("> [server::start_server] starting server")
-        self.messager.host_connection(self.host,self.port)
+        self.messager.host_connection(self.host,self.port,5)
         self.messager.set_blocking_connections(False)
         self.inputs.append(self.messager.get_sock())
         print("> [server::start_server] started server")
@@ -35,15 +36,15 @@ class CentralServer:
                 if command == self.messager.get_sock():
 
                     new_messager = self.messager.accept()
-                    login_message = self.messager.receive()
+                    login_message = new_messager.receive()
                     login_message = login_message.split()
                     print('> [server::run] new user ' + login_message[1] + ' detected')
 
                     if login_message[0] == 'NEW': # Usuário novo no sistema
                         while login_message[1] in self.users.keys():
-                            login_message = self.messager.send_and_receive("USERNAME ALREADY EXISTS")
+                            login_message = new_messager.send_and_receive("USERNAME ALREADY EXISTS")
                             login_message = login_message.split()
-                        self.messager.send("REGISTERED")
+                        new_messager.send("REGISTERED")
 
                         self.new_connection(login_message[1],new_messager) 
 
@@ -51,14 +52,24 @@ class CentralServer:
                         print("> [server::run] user " + login_message[1] + " is returning")
                         self.returning_connection(login_message[1],new_messager)
 
+                    self.update_messagers()
+
                 elif command == sys.stdin:
                     adm_command = input()
                     adm_command = adm_command.split()[0]
                     self.handle_admin_command(adm_command)
 
                 else:
-                    self.handle_request(command)
+                    self.handle_request(self.get_messager_by_sock(command))
     
+    def update_messagers(self):
+        self.messagers = [user.messager for user in self.users.values()]
+
+    def get_messager_by_sock(self,sock):
+        for user in self.users.values():
+            if user.messager.sock == sock:
+                return user.messager
+
     # Lida com os comandos inseridos via standard input
     def handle_admin_command(self,adm_command):
         if adm_command == 'close':
@@ -149,7 +160,7 @@ class CentralServer:
         self.users[request_user.username].chat_info = chat_location
         messager.send(chat_location[0] + ' ' + str(chat_location[1]))
 
-        self.messager.emit_message(self.get_available_chats(),[user.messager for user in self.users.values()])
+        self.messager.emit_message(self.show_available_chats(),[user.messager for user in self.users.values()])
 
     # Envia a dupla host port do chat, se existir. Senão, envia DENIED
     def connect_to_chat(self,messager,username):
@@ -166,6 +177,7 @@ class CentralServer:
         for uid in self.users.keys():
             if uid == username:
                 self.users.pop(uid)
+                self.update_messagers()
                 break
 
 if __name__ == '__main__':

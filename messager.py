@@ -10,10 +10,11 @@ class Messager:
         self.sock.connect((host,port))
 
     def host_connection(self, host, port, amount_of_connections):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((host,port))
         self.sock.listen(amount_of_connections)
 
-    def set_blocking_connections(self, is_blocking)
+    def set_blocking_connections(self, is_blocking):
         self.sock.setblocking(is_blocking)
 
     def send(self,message):
