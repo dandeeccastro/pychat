@@ -27,5 +27,8 @@ x User Guest Side
 		x Possivelmente usuários duplicados
 	x Client desconectado deixa host recebendo mensagens vazias do socket morto 
 		x Não tem como atualizar users ou read 
-	- Server trava com o login
-		- Implementação do sistema de username trava o servidor com um while que bloqueia ao invés do select
+	x Server trava com o login
+		x Implementação do sistema de username trava o servidor com um while que bloqueia ao invés do select
+	- Quando usuário cria um chat, o socket que está no select vira um file descriptor de um file que não existe mais
+		- Se pa usar socket.detach()
+		- Ou passar o select.select como abstração de Messager
