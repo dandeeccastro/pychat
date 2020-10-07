@@ -46,3 +46,6 @@ class Messager:
     def accept(self):
         new_sock, addr = self.sock.accept()
         return Messager(new_sock)
+
+    def get_pair_host_port(self):
+        return self.sock.getsockname()
